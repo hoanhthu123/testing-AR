@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>3D Flip Book - Three.js</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #333; }
+        canvas { display: block; }
+        #instruction {
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+            color: white; font-family: Arial; pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="instruction">Click để lật trang</div>
+    <!-- Import Three.js và GSAP -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+</body>
+</html>
