@@ -2,17 +2,17 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <title>3D Real Flip Book</title>
+    <title>Ultra Smooth 3D Book</title>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #333; }
+        body { margin: 0; overflow: hidden; background-color: #222; }
         #instruction {
             position: absolute; top: 20px; width: 100%; text-align: center;
-            color: white; font-family: sans-serif; pointer-events: none;
+            color: rgba(255,255,255,0.5); font-family: sans-serif; pointer-events: none;
         }
     </style>
 </head>
 <body>
-    <div id="instruction">CLICK VÀO BÊN PHẢI ĐỂ LẬT TRANG</div>
+    <div id="instruction">CLICK ĐỂ LẬT TRANG (MƯỢT MÀ)</div>
 
     <script type="importmap">
         {
@@ -22,101 +22,113 @@
             }
         }
     </script>
+    <!-- Import GSAP để xử lý animation mượt -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
 
     <script type="module">
         import * as THREE from 'three';
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-        // 1. Setup cơ bản
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x1a1a1a);
-
         const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
-        // Đặt camera nhìn xéo để thấy hiệu ứng 3D rõ nhất
-        camera.position.set(0, 10, 15); 
+        camera.position.set(0, 12, 18);
 
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio); // Tăng độ nét
+        renderer.shadowMap.enabled = true;
         document.body.appendChild(renderer.domElement);
 
         const controls = new OrbitControls(camera, renderer.domElement);
-        const ambientLight = new THREE.AmbientLight(0xffffff, 1.5);
-        scene.add(ambientLight);
+        controls.enableDamping = true; // Làm cho việc xoay camera mượt hơn
 
-        // 2. Tạo cuốn sách
-        const book = new THREE.Group();
-        scene.add(book);
+        // Ánh sáng phức tạp hơn để nhìn cho thật
+        scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+        dirLight.position.set(5, 15, 5);
+        dirLight.castShadow = true;
+        scene.add(dirLight);
 
-        const pageCount = 8;
+        // Tạo Cuốn sách
         const pages = [];
-        const pageW = 5;
-        const pageH = 7;
-        const pageDepth = 0.02;
+        const pageCount = 6;
+        const pW = 5, pH = 7, pD = 0.01;
 
         for (let i = 0; i < pageCount; i++) {
-            // Tạo Geometry cho trang giấy
-            const geometry = new THREE.BoxGeometry(pageW, pageH, pageDepth);
-            
-            // Màu sắc xen kẽ để dễ nhìn
-            const material = new THREE.MeshPhongMaterial({ 
-                color: i === 0 ? 0x8b4513 : 0xeeeeee // Trang đầu màu nâu (bìa), còn lại màu trắng
-            });
+            const geometry = new THREE.BoxGeometry(pW, pH, pD);
+            // Tạo 2 mặt khác màu (Trắng cho trang giấy, Nâu cho bìa)
+            const materials = [
+                new THREE.MeshPhongMaterial({color: 0xcccccc}), // cạnh
+                new THREE.MeshPhongMaterial({color: 0xcccccc}), // cạnh
+                new THREE.MeshPhongMaterial({color: 0xcccccc}), // cạnh
+                new THREE.MeshPhongMaterial({color: 0xcccccc}), // cạnh
+                new THREE.MeshPhongMaterial({color: i === 0 ? 0x5c3c2e : 0xffffff}), // mặt trước
+                new THREE.MeshPhongMaterial({color: i === 0 ? 0x5c3c2e : 0xf0f0f0}), // mặt sau
+            ];
 
-            const mesh = new THREE.Mesh(geometry, material);
-            
-            // QUAN TRỌNG: Dịch chuyển Mesh sang phải 1/2 chiều rộng 
-            // Để tâm của Group (pivot) nằm đúng gáy sách (mép trái trang giấy)
-            mesh.position.x = pageW / 2;
+            const mesh = new THREE.Mesh(geometry, materials);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            mesh.position.x = pW / 2;
 
             const pivot = new THREE.Group();
             pivot.add(mesh);
+            // Khoảng cách giữa các trang cực nhỏ để tránh nhấp nháy
+            pivot.position.z = -i * 0.02; 
             
-            // Xếp các trang chồng lên nhau theo trục Z (độ dày cuốn sách)
-            pivot.position.z = i * (pageDepth + 0.005); 
-            
-            book.add(pivot);
+            scene.add(pivot);
             pages.push(pivot);
         }
 
-        // 3. Logic lật trang
         let currentPage = 0;
-        const targetRotations = pages.map(() => 0);
+        let isAnimating = false;
 
         window.addEventListener('mousedown', (e) => {
-            // Chỉ lật khi click chuột trái
-            if (e.button !== 0) return;
+            if (e.button !== 0 || isAnimating || currentPage >= pageCount) return;
 
-            if (currentPage < pageCount) {
-                // Lật trang hiện tại sang trái 180 độ (PI)
-                targetRotations[currentPage] = -Math.PI;
-                currentPage++;
-            } else {
-                // Nếu hết trang thì reset lại từ đầu
-                for(let i=0; i<pageCount; i++) targetRotations[i] = 0;
-                currentPage = 0;
-            }
-        });
+            isAnimating = true;
+            const page = pages[currentPage];
 
-        // 4. Render loop
-        function animate() {
-            requestAnimationFrame(animate);
-
-            pages.forEach((page, index) => {
-                // Lật trang theo trục Y (trục đứng của gáy sách)
-                page.rotation.y = THREE.MathUtils.lerp(page.rotation.y, targetRotations[index], 0.1);
-                
-                // Nâng trang đang lật lên một chút để tránh trùng lặp hình ảnh (Z-fighting)
-                if (Math.abs(page.rotation.y) > 0.1 && Math.abs(page.rotation.y) < Math.PI - 0.1) {
-                    page.position.y = 0.5; // Nhấc lên khi đang bay
-                } else {
-                    page.position.y = 0;
+            // Dùng GSAP Timeline để kết hợp Quay và Nhấc trang lên cùng lúc
+            const tl = gsap.timeline({
+                onComplete: () => {
+                    isAnimating = false;
+                    currentPage++;
                 }
             });
 
-            controls.update();
+            // 1. Animation quay 180 độ
+            tl.to(page.rotation, {
+                y: -Math.PI,
+                duration: 1.4,
+                ease: "power2.inOut" // Kiểu di chuyển mượt (chậm-nhanh-chậm)
+            }, 0);
+
+            // 2. Animation "Nhấc trang" (bay lên theo hình cầu) để không bị đè trang dưới
+            tl.to(page.position, {
+                y: 1.5, // Nhấc lên cao 1.5 đơn vị
+                duration: 0.7,
+                ease: "power1.out"
+            }, 0);
+            
+            tl.to(page.position, {
+                y: 0, // Hạ xuống lại khi kết thúc lật
+                duration: 0.7,
+                ease: "power1.in"
+            }, 0.7);
+
+            // 3. Đẩy trang lên phía trước một chút để sau khi lật nó nằm trên trang cũ
+            tl.to(page.position, {
+                z: currentPage * 0.05 + 0.1,
+                duration: 1.4
+            }, 0);
+        });
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update(); // Cần thiết cho enableDamping
             renderer.render(scene, camera);
         }
-
         animate();
 
         window.addEventListener('resize', () => {
